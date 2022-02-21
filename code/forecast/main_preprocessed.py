@@ -6,11 +6,32 @@ from pyomo.environ import SolverFactory, value
 from functions.f_vm import vm_expand_grid, vm_make_capa_avail, vm_make_margin
 from functions.f_graphicalTools import EnergyAndExchange2Prod
 from functions.f_optimization import getVariables_panda_indexed, getConstraintsDual_panda
-from pyomo_preprocessed import GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode
-from update_parameters import linear_create_params, linear_update, linear_create_data, local_linear_create_params, local_linear_create_data, time_local_linear_update, preprocessed_linear_update, preprocessed_local_linear_update
+from pyomo_model import GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode
+from pyomo_preprocessed import GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode_preprocessed
+from update_parameters import linear_create_params, linear_update, linear_create_data, local_linear_create_params, local_linear_create_data, time_local_linear_update, preprocessed_linear_update, driver_local_linear_update
 
 
-def import_data(year_train, year_test, is_train, solve_model, preprocessing, window_size, step_local_linear, best_iter, is_with_bias_corr, FOLDER_OUTPUT, margin_func, fuel_func, C02_func):
+def forecast_prices(year_train, year_test, is_train, solve_model, preprocessing, window_size, step_local_linear, drivers, best_iter, is_with_bias_corr, FOLDER_OUTPUT, margin_func, fuel_func, C02_func):
+    """    
+    compute electricity prices
+    if train compute parameters of the model
+    if test apply model (with calculated parameters)
+    year_train : int
+    year_tets : int
+    is_train : bool
+    solve_model : str among 'linear', 'time_local_linear', 'knn_local_linear'
+    preprocessing : bool
+    window_size : int (with time_local_linear)
+    step_local_linear : int (with local linear models)
+    drivers : list[str] (with knn_local_linear)
+    best_iter : int (train iteration to use in test)
+    is_with_bias_corr : bool
+    FOLDER_OUTPUT : str 
+    margin_func : func (apply func to margin before linear regression)
+    fuel_func : func
+    C02_func : func
+    """
+    
     # Define constants
     solver= 'mosek' ## no need for solverpath with mosek.
     area = 'FR'
@@ -36,6 +57,7 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
     area_consumption_df['AREAS'] = area
     avail_factor_df = pd.read_csv(InputFolder + 'r_availabilityFactor' + str(year_test) + '_' + str(area) + '.csv')
     avail_factor_df['AREAS'] = area
+
     # Read technologies and storage constants
     tech_case='r_article_ramp'
     tech_parameters_df = pd.read_csv(InputFolder+'Gestion_'+tech_case+'_TECHNOLOGIES'+str(year_test)+'.csv')
@@ -55,8 +77,6 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
         area_consumption_df_train['AREAS'] = area
         timestamp_train_df = area_consumption_df_train.query("AREAS == 'FR'")[['TIMESTAMP','DateTime']]
         timestamp_train_df['TIMESTAMP_d'] = pd.to_datetime(timestamp_train_df.DateTime, format='%Y-%m-%dT%H:%M:%SZ')
-
-    # print(timestamp_df)
 
     # Use GW to avoid problems with quadratic objective function
     conversion_factor = 1E3
@@ -78,7 +98,6 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
     availabilityFactor = availabilityFactor.set_index(["AREAS","TIMESTAMP","TECHNOLOGIES"])
     availabilityFactor = availabilityFactor.merge(avail_factor_df, how = 'left', left_index=True, right_index=True)
     availabilityFactor = availabilityFactor.fillna(1) # fix curtailment
-    # print(availabilityFactor)
 
     # Set index for merging
     tech_parameters_df.set_index(['AREAS','TECHNOLOGIES'], inplace=True)
@@ -87,20 +106,14 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
     # Read margin preprocessed
     capacity_available_df = vm_make_capa_avail(installed_capa=tech_parameters_df, availability_factor=availabilityFactor)
     margin_df = vm_make_margin(capa_avail_df=capacity_available_df, conso_df=area_consumption_df)
-    # print('margin', margin_df)
     all_margin_df = pd.read_csv(PreprocessedFolder + 'margin.csv')
-    # print(timestamp_df)
-    # print(all_margin_df)
     all_margin_df['TIMESTAMP_d'] = all_margin_df.TIMESTAMP_d.astype('datetime64[ns]')
     margin_df = all_margin_df.merge(timestamp_df, on='TIMESTAMP_d')
     margin_df = margin_df[['margin']]
-    # print(margin_df)
     margin_index_df = vm_expand_grid(
         {"AREAS": selected_area, "TIMESTAMP": selected_timestamp})
     margin_index_df = margin_index_df.merge(margin_df, left_index=True, right_index=True)
     margin_index_df.set_index(['AREAS', 'TIMESTAMP'], inplace=True)
-    # print(margin_index_df)
-    # print('margin_preprocessed', margin_df)
 
     availabilityFactor = availabilityFactor.loc[(selected_area,slice(None),selected_techno),:]
     TechParameters = tech_parameters_df.loc[(selected_area,selected_techno),:]
@@ -114,8 +127,7 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
     co2_price_df = timestamp_df.merge(fuel_prices_df, how = 'left')[['TIMESTAMP', 'co2_price']]
     co2_price_df.set_index(['TIMESTAMP'], inplace= True)
 
-    # print('fuel', fuel_price_df)
-
+    # Interconnexions
     interco_TechParameters_df = pd.read_csv(InputFolder + 'r_interco_TechParameters_' + str(year_test) + '.csv',
                      sep=',', decimal='.', skiprows=0)
 
@@ -129,7 +141,6 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
     availabilityFactor_import = availabilityFactor_import.rename(columns = {'availabilityFactor_import':'availabilityFactor'})
     availabilityFactor_import.set_index(['AREAS','TIMESTAMP','INTERCOS'], inplace = True)
     availabilityFactor_import = availabilityFactor_import[['availabilityFactor']]
-    #print(availabilityFactor_import)
 
     # availabiltyFactor_export
     availabilityFactor_export = interco_tmp_df.copy()
@@ -166,7 +177,6 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
     da_prices_df['TIMESTAMP_d'] = da_prices_df.TIMESTAMP_d.astype('datetime64[ns]')
     daPrices_df = da_prices_df.merge(timestamp_df, on='TIMESTAMP_d').set_index(['AREAS','TIMESTAMP'])
     daPrices_df = daPrices_df[['TIMESTAMP_d','price_obs', 'price_trend', 'price_seasonal', 'price_resid']]
-    # print('Prix avant boucle', daPrices_df)
 
     if not is_train:
         daPrices_train_df = da_prices_df.merge(timestamp_train_df, on='TIMESTAMP_d').set_index(['AREAS','TIMESTAMP'])
@@ -210,7 +220,6 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
     margin_price_df = margin_price_df.merge(
         price_param_df[['margin_param']], left_index=True, right_index=True).merge(
         margin_index_df[['margin']], left_index=True, right_index=True) 
-    # print('margin price', margin_price_df)
 
     # Initialize outputs
     model_list = list()
@@ -235,20 +244,30 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
             obj_param_df = linear_create_data(empty_indexed_df, price_param_df, margin_price_df, full_fuel_price_df, full_co2_price_df)
         elif solve_model == 'local_linear':
             obj_param_df = local_linear_create_data(empty_indexed_df, price_param_df, margin_price_df, full_fuel_price_df, full_co2_price_df)
-        
-        # print(obj_param_df['fuel_price_param'], full_fuel_price_df['fuel_price'])
-        # print(obj_param_df['p2'])
-        # print(price_param_df)
-        
+                
         # Fill na values
         obj_param_df.fillna(0, inplace=True)
 
         isAbstract = False
         LineEfficiency = 1
 
-        # Résolution du problème d'optimisation
+        # Resolution of the optimization problem
         t = time.time()
-        model = GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode(daPrices_df , area_consumption_df,availabilityFactor,TechParameters,storage_parameters_df,
+
+        if not preprocessing:
+            model = GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode(area_consumption_df,availabilityFactor,TechParameters,storage_parameters_df,
+                                                                    obj_param_df=obj_param_df, 
+                                                                    # price_param_df=price_param_df, margin_df=margin_df,
+                                                                    #empty_indexed_df=empty_indexed_df,
+                                                                    availabilityFactor_import=availabilityFactor_import,
+                                                                    TechParameters_import=TechParameters_import,
+                                                                    import_df=import_df,
+                                                                    availabilityFactor_export=availabilityFactor_export,
+                                                                    TechParameters_export=TechParameters_export,
+                                                                    export_df=export_df,
+                                                                    LineEfficiency=LineEfficiency)
+        else:
+            model = GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode_preprocessed(daPrices_df , area_consumption_df,availabilityFactor,TechParameters,storage_parameters_df,
                                                                     obj_param_df=obj_param_df, 
                                                                     mean_sd = mean_sd,
                                                                     # price_param_df=price_param_df, margin_df=margin_df,
@@ -264,9 +283,6 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
         t2 = time.time()
         print('iteration : ', iteration)
         print('model',t2 - t)
-
-        # print(obj_param_df.iloc[:12, :])
-        # print(TechParameters_import)
 
         opt = SolverFactory(solver)
         results = opt.solve(model)
@@ -343,7 +359,6 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
         # max_besides_curtailment = max(
         #     final_merit_order_df.reset_index()[final_merit_order_df.reset_index().TECHNOLOGIES != "curtailment"].price_sim)
 
-        # qwe3_df =  final_merit_order_df
         final_merit_order_df = merit_order_df
         print(final_merit_order_df)
         # Add bias correction
@@ -405,22 +420,20 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
 
         extended_for_estim_param_df['price_reg'] = extended_for_estim_param_df['price_factor'] * extended_for_estim_param_df['price_resid']
 
-        # print(final_merit_order_df, extended_for_estim_param_df)
-
         # Train model and update parameters
         if is_train and solve_model == 'linear' and not preprocessing:
             print("linear model")
             price_param_df = linear_update(selected_techno, selected_area, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list)
-        if is_train and solve_model == 'local_linear' and not preprocessing:
+        if is_train and solve_model == 'time_local_linear' and not preprocessing:
             print('local linear model')
-            price_param_df = local_linear_update(selected_techno, selected_area, selected_timestamp, step_local_linear, window_size, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list)
+            price_param_df = time_local_linear_update(selected_techno, selected_area, selected_timestamp, step_local_linear, window_size, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list)
+        if is_train and solve_model == 'knn_local_linear' and not preprocessing:
+            print('local linear model')
+            price_param_df = driver_local_linear_update(selected_techno, selected_area, selected_timestamp, step_local_linear, window_size, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list, drivers)        
         if is_train and solve_model == 'linear' and preprocessing:
             print('preprocessed linear')
             price_param_df = preprocessed_linear_update(selected_techno, selected_area, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list)
-        if is_train and solve_model == 'local_linear' and preprocessing:
-            print('preprocessed local linear')
-            price_param_df = preprocessed_local_linear_update(selected_techno, selected_area, selected_timestamp, step_local_linear, window_size, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list)
-
+        
         ### Get Lagrangian ###
         Constraints = getConstraintsDual_panda(model)
         Constraints.keys()
@@ -555,21 +568,16 @@ def step_func(threshold):
 start = time.time()
 step = 50
 
-# Test with linear
-# FOLDER_OUTPUT = 'data_elecprices/output/'
-# model = 'linear'
-# print(model)
-# import_data(2015, 2016, False, model, 0, 0, return_best_iter(2015), True, FOLDER_OUTPUT, id_func, id_func, id_func)
-
-# Train Test with local linear
+# Train Test with linear
 FOLDER_OUTPUT = 'data_elecprices/output_modified/'
 model = 'linear'
-step_local_linear = 24 # a week
+step_local_linear = 24 # a day
 window_size = step_local_linear//2
 preprocessing = True
+drivers = ['intercept', 'energy', 'margin', 'fuel_price', 'co2_price']
 
-import_data(2015, 2015, True, model, preprocessing, window_size, step_local_linear, 4, True, FOLDER_OUTPUT, id_func, id_func, id_func)
+forecast_prices(2015, 2015, True, model, preprocessing, window_size, step_local_linear, drivers, 4, True, FOLDER_OUTPUT, id_func, id_func, id_func)
 
-import_data(2015, 2016, False, model, preprocessing, window_size, step_local_linear, 3, True, FOLDER_OUTPUT, id_func, id_func, id_func)
+forecast_prices(2015, 2016, False, model, preprocessing, window_size, step_local_linear, drivers, 3, True, FOLDER_OUTPUT, id_func, id_func, id_func)
 
 print(time.time() - start)

@@ -1,7 +1,8 @@
-from os import stat
 import matplotlib.pyplot as plt
 import pickle as pkl
 import numpy as np
+
+# From simulations with uncertainties compute statistics and boxplot
 
 INPUT_FOLDER = 'C:/Users/cotil/Desktop/COURS/Mines/2A/Sophia/Projet/main/data_elecprices/output_modified/incertitude/'
 
@@ -29,6 +30,9 @@ std_train = [i for j in std_train for i in j]
 std_test = [i for j in std_test for i in j]
 
 def stats(values, str_value):
+    """
+    print mean and standard deviation of values
+    """
     print('max_' + str_value +  ' : ', np.max(values))
     print('min_' + str_value +  ' : ', np.min(values))
     print('mean_' + str_value +  ' : ', np.mean(values))
@@ -40,6 +44,7 @@ stats(rmse_test, 'rmse_test')
 stats(std_train, 'std_train')
 stats(std_test, 'std_test')
 
+# Plot boxplots
 # plt.scatter(std_train, rmse_train)
 plt.boxplot(rmse_train, vert=False)
 # plt.boxplot(std_train)

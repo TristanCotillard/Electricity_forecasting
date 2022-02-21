@@ -2,13 +2,16 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import lsq_linear
 from functions.f_vm import vm_expand_grid
-import matplotlib.pyplot as plt
 import time
 
 from drivers_nn import find_driver_nn
 
 
 def linear_create_params(selected_techno, selected_area, TechParameters):
+    """
+    initialize linear regression parameters (one value per year)
+    """
+    
     price_param_df = vm_expand_grid({"AREAS": selected_area, "TECHNOLOGIES": selected_techno})
     price_param_df = price_param_df.set_index(['AREAS', 'TECHNOLOGIES'])
     # price_param_df = TechParameters[[]].copy()
@@ -17,7 +20,6 @@ def linear_create_params(selected_techno, selected_area, TechParameters):
     price_param_df['margin_param'] = 0 # -1
     price_param_df['fuel_price_param'] = 1
     price_param_df['co2_price_param'] = 1
-    # price_param_df['unavail_power_param'] = 1
 
     # Init intercept_param
     cols = price_param_df.columns.tolist()
@@ -26,9 +28,7 @@ def linear_create_params(selected_techno, selected_area, TechParameters):
         columns = 'intercept_param').rename(
         columns={'energyCost':'intercept_param'}
     )
-    # print('intercept param 0', price_param_df)
     price_param_df['intercept_param'] = 0
-    # print(price_param_df)
     price_param_df = price_param_df[cols]
 
     # price_param_df
@@ -50,6 +50,10 @@ def linear_create_params(selected_techno, selected_area, TechParameters):
     return price_param_df
 
 def linear_create_data(empty_indexed_df, price_param_df, margin_price_df, full_fuel_price_df, full_co2_price_df):
+    """
+    return parameters and drivers values in case of linear regression
+    """
+    
     obj_param_df = empty_indexed_df.merge(
             price_param_df['intercept_param'], how='left', left_index=True, right_index=True).merge(
             price_param_df['margin_param'], how='left', left_index=True, right_index=True).merge(
@@ -69,6 +73,10 @@ def linear_create_data(empty_indexed_df, price_param_df, margin_price_df, full_f
 
 
 def linear_update(selected_techno, selected_area, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list):
+    """
+    Update parameters values with linear regressions on observed prices
+    """
+    
     my_Selected_TECHNOLOGIES = selected_techno.copy()
     my_Selected_TECHNOLOGIES.remove('curtailment')
     param_dict = {}
@@ -77,6 +85,7 @@ def linear_update(selected_techno, selected_area, for_estim_param_df, extended_f
     nb_min_rows = 5
     for my_area in selected_area:
         for my_tech in my_Selected_TECHNOLOGIES:
+            # lower and upper bounds of parameters
             lb = [0,      0,     -np.inf, 0,      0]
             ub = [np.inf, np.inf,      0,       np.inf, 0.00001] # 0.00001
             # special values for co2_prices
@@ -120,6 +129,10 @@ def linear_update(selected_techno, selected_area, for_estim_param_df, extended_f
     return price_param_df
 
 def preprocessed_linear_update(selected_techno, selected_area, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list):
+    """
+    Update parameters values with linear regressions on observed residual prices
+    """
+    
     my_Selected_TECHNOLOGIES = selected_techno.copy()
     my_Selected_TECHNOLOGIES.remove('curtailment')
     param_dict = {}
@@ -129,20 +142,20 @@ def preprocessed_linear_update(selected_techno, selected_area, for_estim_param_d
     for my_area in selected_area:
         for my_tech in my_Selected_TECHNOLOGIES:
             lb = [0,      0,     -np.inf, 0,      0]
-            ub = [np.inf, np.inf,      0,       np.inf, np.inf] # 0.00001
+            ub = [np.inf, np.inf,      0,       np.inf, 0.00001] # 0.00001
             # special values for co2_prices
-            # if (my_tech == 'Fossil Hard coal'):
-            #     lb[4] = 0.986  # tCO2/MWh
-            #     ub[4] = lb[4] + 0.00001
-            # if (my_tech == 'Fossil Oil'):
-            #     lb[4] = 0.777
-            #     ub[4] = lb[4] + 0.00001
-            # if (my_tech == 'Fossil Gas'):
-            #     lb[4] = 0.429
-            #     ub[4] = lb[4] + 0.00001
-            # if (my_tech == 'Biomass'):
-            #     lb[4] = 0.494
-            #     ub[4] = lb[4] + 0.001
+            if (my_tech == 'Fossil Hard coal'):
+                lb[4] = 0.986  # tCO2/MWh
+                ub[4] = lb[4] + 0.00001
+            if (my_tech == 'Fossil Oil'):
+                lb[4] = 0.777
+                ub[4] = lb[4] + 0.00001
+            if (my_tech == 'Fossil Gas'):
+                lb[4] = 0.429
+                ub[4] = lb[4] + 0.00001
+            if (my_tech == 'Biomass'):
+                lb[4] = 0.494
+                ub[4] = lb[4] + 0.001
             
             tmp_df = for_estim_param_df.query('AREAS == @my_area and TECHNOLOGIES == @my_tech')
             
@@ -172,6 +185,10 @@ def preprocessed_linear_update(selected_techno, selected_area, for_estim_param_d
 
 
 def local_linear_create_params(selected_techno, selected_area, selected_timestamp, TechParameters):
+    """
+    initialize parameters (a value per timestamp)
+    """
+    
     price_param_df = vm_expand_grid({"AREAS": selected_area, "TIMESTAMP": selected_timestamp, "TECHNOLOGIES": selected_techno})
     price_param_df = price_param_df.set_index(['AREAS', 'TIMESTAMP', 'TECHNOLOGIES'])
 
@@ -205,7 +222,10 @@ def local_linear_create_params(selected_techno, selected_area, selected_timestam
     return price_param_df
 
 def local_linear_create_data(empty_indexed_df, price_param_df, margin_price_df, full_fuel_price_df, full_co2_price_df):
-    
+    """
+    return parameters and drivers values adapted with local linear model
+    """
+
     obj_param_df = empty_indexed_df.merge(
             price_param_df['intercept_param'], how='left', left_index=True, right_index=True).merge(
             price_param_df['margin_param'], how='left', left_index=True, right_index=True).merge(
@@ -222,6 +242,10 @@ def local_linear_create_data(empty_indexed_df, price_param_df, margin_price_df, 
 
 
 def time_local_linear_update(selected_techno, selected_area, selected_timestamp, step, window_size, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list, drivers):
+    """
+    update parameters with time local linear model (linear regression with a fixed window)
+    """
+    
     my_Selected_TECHNOLOGIES = selected_techno.copy()
     my_Selected_TECHNOLOGIES.remove('curtailment')
     selected_techno = my_Selected_TECHNOLOGIES
@@ -290,6 +314,10 @@ def time_local_linear_update(selected_techno, selected_area, selected_timestamp,
     return price_param_df
 
 def driver_local_linear_update(selected_techno, selected_area, selected_timestamp, step, window_size, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list, drivers):
+    """
+    update parameters with k-nn local linear model (linear regression with k nearest neighbors)
+    """
+    
     my_Selected_TECHNOLOGIES = selected_techno.copy()
     my_Selected_TECHNOLOGIES.remove('curtailment')
     selected_techno = my_Selected_TECHNOLOGIES
@@ -327,7 +355,6 @@ def driver_local_linear_update(selected_techno, selected_area, selected_timestam
                 tmp_df, index_nn = find_driver_nn(my_time, tmp_df, drivers)
 
                 if (tmp_df.shape[0] >= nb_min_rows):
-                    # print(tmp_df)
                     # passed_timestamp[ index_nn - 1]  = 1 # timestamp from 1 to end
 
                     A = tmp_df[my_variables].values
@@ -347,10 +374,6 @@ def driver_local_linear_update(selected_techno, selected_area, selected_timestam
                     calib = lsq_linear(A, b, bounds=(lb, ub), lsmr_tol='auto')
                     param_dict[(my_area, my_time, my_tech)] = calib.x
 
-                if my_time % 2000 == 0:
-                    print(my_tech, my_time)
-                    # print(tmp_df) 
-
     asd = pd.DataFrame.from_dict(param_dict, orient='index')
     asd.index = pd.MultiIndex.from_tuples(asd.index.values, names=['AREAS', 'TIMESTAMP', 'TECHNOLOGIES'])
     asd.columns = param_names
@@ -362,77 +385,6 @@ def driver_local_linear_update(selected_techno, selected_area, selected_timestam
     # print(price_param_df)
     print('linear approx time : ', time.time() - t)
     return price_param_df
-
-
-def preprocessed_local_linear_update(selected_techno, selected_area, selected_timestamp, step, window_size, for_estim_param_df, extended_for_estim_param_df, iteration, price_param_df_list):
-    my_Selected_TECHNOLOGIES = selected_techno.copy()
-    my_Selected_TECHNOLOGIES.remove('curtailment')
-    selected_techno = my_Selected_TECHNOLOGIES
-    
-    param_dict = {}
-    my_variables = ['intercept', 'energy', 'margin', 'fuel_price', 'co2_price']
-    param_names = [f'{i}_param' for i in my_variables]
-    nb_min_rows = 5
-    t = time.time()
-    for my_area in selected_area:
-        for rg_time in range(0, len(selected_timestamp), step):
-            my_time = selected_timestamp[rg_time]
-            for my_tech in selected_techno:
-                lb = [0,      0,     -np.inf, 0,      0]
-                ub = [np.inf, np.inf,      0,       np.inf, 0.00001] # 0.00001
-                # special values for co2_prices
-                if (my_tech == 'Fossil Hard coal'):
-                    lb[4] = 0.986  # tCO2/MWh
-                    ub[4] = lb[4] + 0.00001
-                if (my_tech == 'Fossil Oil'):
-                    lb[4] = 0.777
-                    ub[4] = lb[4] + 0.00001
-                if (my_tech == 'Fossil Gas'):
-                    lb[4] = 0.429
-                    ub[4] = lb[4] + 0.00001
-                if (my_tech == 'Biomass'):
-                    lb[4] = 0.494
-                    ub[4] = lb[4] + 0.001
-                
-                tmp_df = for_estim_param_df.query('AREAS == @my_area and TECHNOLOGIES == @my_tech and @my_time - @window_size <= TIMESTAMP and TIMESTAMP <= @my_time + @window_size')
-                # tmp_df = for_estim_param_df[ for_estim_param_df['AREAS'] == my_area & for_estim_param_df['TECHNOLOGIES'] == my_tech]
-                # tmp_df = tmp_df[ my_time - window_size <= for_estim_param_df['TIMESTAMP'] <= my_time + window_size ]
-                
-                if (tmp_df.shape[0] >= nb_min_rows):
-                    A = tmp_df[my_variables].values
-                    b = tmp_df['price_resid'].values
-                    weigths = window_kernel(tmp_df.shape[0])
-                    A = np.einsum('ij,i->ij', A, weigths)
-                    b = np.multiply(b, weigths)
-
-                    calib = lsq_linear(A, b, bounds=(lb, ub), lsmr_tol='auto')
-                    for rg_all_time in range(step):
-                        param_dict[(my_area, my_time + rg_all_time, my_tech)] = calib.x
-                else:
-                    tmp2_df = extended_for_estim_param_df.query('AREAS == @my_area and TECHNOLOGIES == @my_tech and @my_time - @window_size <= TIMESTAMP and TIMESTAMP <= @my_time + @window_size').copy()
-                    tmp2_df['intercept'] = 1
-                    A = tmp2_df[my_variables].values
-                    b = tmp2_df['price_reg'].values
-                    calib = lsq_linear(A, b, bounds=(lb, ub), lsmr_tol='auto')
-                    for rg_all_time in range(step):
-                        param_dict[(my_area, my_time + rg_all_time, my_tech)] = calib.x
-
-                # if my_time % 500 == 0:
-                #     print(my_tech, my_time)
-                #     print(tmp_df) 
-
-    asd = pd.DataFrame.from_dict(param_dict, orient='index')
-    asd.index = pd.MultiIndex.from_tuples(asd.index.values, names=['AREAS', 'TIMESTAMP', 'TECHNOLOGIES'])
-    asd.columns = param_names
-
-    cols = asd.columns.tolist()
-    zxc = asd.combine_first(price_param_df_list[iteration])[cols]
-
-    price_param_df = zxc
-    # print(price_param_df)
-    print('linear approx time : ', time.time() - t)
-    return price_param_df
-
 
 def window_kernel(size):
     return np.ones(size)

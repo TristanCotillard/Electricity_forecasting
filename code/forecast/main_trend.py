@@ -7,11 +7,16 @@ from sklearn.preprocessing import StandardScaler
 from functions.f_vm import vm_expand_grid, vm_make_capa_avail, vm_make_margin
 from functions.f_graphicalTools import EnergyAndExchange2Prod
 from functions.f_optimization import getVariables_panda_indexed, getConstraintsDual_panda
-from pyomo_preprocessed import GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode
+from pyomo_preprocessed import GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode_trend
 from update_parameters import linear_create_params, linear_update, linear_create_data, local_linear_create_params, local_linear_create_data, time_local_linear_update, preprocessed_linear_update, preprocessed_local_linear_update
 
 
-def import_data(year_train, year_test, is_train, solve_model, preprocessing, window_size, step_local_linear, best_iter, is_with_bias_corr, FOLDER_OUTPUT, margin_func, fuel_func, C02_func):
+def forecast_prices(year_train, year_test, is_train, solve_model, preprocessing, window_size, step_local_linear, best_iter, is_with_bias_corr, FOLDER_OUTPUT, margin_func, fuel_func, C02_func):
+    """
+    Compute electricity prices
+    Similar to main_preprocessed applied to trend
+    """
+    
     # Define constants
     solver= 'mosek' ## no need for solverpath with mosek.
     area = 'FR'
@@ -255,7 +260,7 @@ def import_data(year_train, year_test, is_train, solve_model, preprocessing, win
 
         # Résolution du problème d'optimisation
         t = time.time()
-        model = GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode(daPrices_df , area_consumption_df,availabilityFactor,TechParameters,storage_parameters_df,
+        model = GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode_trend(daPrices_df , area_consumption_df,availabilityFactor,TechParameters,storage_parameters_df,
                                                                     obj_param_df=obj_param_df, 
                                                                     mean_sd = mean_sd,
                                                                     # price_param_df=price_param_df, margin_df=margin_df,
@@ -570,7 +575,7 @@ step = 50
 # FOLDER_OUTPUT = 'data_elecprices/output/'
 # model = 'linear'
 # print(model)
-# import_data(2015, 2016, False, model, 0, 0, return_best_iter(2015), True, FOLDER_OUTPUT, id_func, id_func, id_func)
+# forecast_prices(2015, 2016, False, model, 0, 0, return_best_iter(2015), True, FOLDER_OUTPUT, id_func, id_func, id_func)
 
 # Train Test with local linear
 FOLDER_OUTPUT = 'data_elecprices/output_modified/'
@@ -579,8 +584,8 @@ step_local_linear = 24 # a week
 window_size = step_local_linear//2
 preprocessing = True
 
-# import_data(2018, 2018, True, model, preprocessing, window_size, step_local_linear, 4, True, FOLDER_OUTPUT, id_func, id_func, id_func)
+# forecast_prices(2018, 2018, True, model, preprocessing, window_size, step_local_linear, 4, True, FOLDER_OUTPUT, id_func, id_func, id_func)
 
-import_data(2018, 2015, False, model, preprocessing, window_size, step_local_linear, 2, True, FOLDER_OUTPUT, id_func, id_func, id_func)
+forecast_prices(2018, 2015, False, model, preprocessing, window_size, step_local_linear, 2, True, FOLDER_OUTPUT, id_func, id_func, id_func)
 
 print(time.time() - start)

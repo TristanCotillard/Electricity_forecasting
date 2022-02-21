@@ -1,7 +1,7 @@
 from pyomo.environ import *
 import pandas as pd
 
-def GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode(daPrices_df, areaConsumption,availabilityFactor,TechParameters,
+def GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode_preprocessed(daPrices_df, areaConsumption,availabilityFactor,TechParameters,
                                                                    StorageParameters,
                                                                    obj_param_df,
                                                                    mean_sd,
@@ -19,6 +19,7 @@ def GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode(daPrices_df, 
      :param availabilityFactor: panda table
      :param isAbstract: boolean true is the model should be abstract. ConcreteModel otherwise
      :return: pyomo model
+     Same as pyomo_model but with residual simulated (trend and seasonal to be added)
      """
 
     # isAbstract=False
@@ -73,12 +74,17 @@ def GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode(daPrices_df, 
     ###############
     # Parameters ##
     ###############
+    
+    # extract mean and standard deviation to calculate real simulated prices (not preprocessed)
     mean_price = mean_sd['price_mean']
     sd_price = mean_sd['price_sd']
+
+    # extract observed trend and seasonal to be added to simulated residual
     model.prices_trend = Param(model.AREAS_TIMESTAMP, 
                                 initialize=daPrices_df['price_trend'].squeeze().to_dict(), domain=Any)
     model.prices_seasonal = Param(model.AREAS_TIMESTAMP, 
                                 initialize=daPrices_df['price_seasonal'].squeeze().to_dict(), domain=Any)
+
     model.areaConsumption = Param(model.AREAS_TIMESTAMP,
                                   initialize=areaConsumption.loc[:, "areaConsumption"].squeeze().to_dict(), domain=Any,
                                   mutable=True)
