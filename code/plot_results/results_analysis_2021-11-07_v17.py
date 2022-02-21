@@ -1,13 +1,15 @@
 import sys
 from matplotlib.backends.backend_pdf import PdfPages
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 with_ramp = True
 
-my_top_folder = 'Data/for_pyomo'
-my_sub_folder = 'v17'
-my_folder = my_top_folder + '/' + my_sub_folder
-for year_train in [2015]:
-    for year_test in [2015,2016,2017,2018]:
+my_top_folder = 'data_elecprices/output_modified/'
+my_folder = my_top_folder
+for year_train in [2018]:
+    for year_test in [2017, 2018]:
         if year_train  != year_test:
             is_with_bias_corr = True
             with_ramp = False
@@ -17,15 +19,16 @@ for year_train in [2015]:
         else:
             is_train = False; my_range = 1
 
-        if is_with_bias_corr:
-            str_biais = 'with bias corr'
-        else:
-            str_biais = 'without bias corr'
+        # if is_with_bias_corr:
+        #     str_biais = 'with bias corr'
+        # else:
+        #     str_biais = 'without bias corr'
 
-        if with_ramp:
-            str_ramp = ', ramp, '
-        else:
-            str_ramp = ', no_ramp, '
+        # if with_ramp:
+        #     str_ramp = ', ramp, '
+        # else:
+        #     str_ramp = ', no_ramp, '
+        str_ramp = ', ramp, '
 
         # load
         results_list = pd.read_pickle(my_folder + '/r_results_list'+str(year_train)+str(year_test)+'.pkl')
@@ -33,7 +36,7 @@ for year_train in [2015]:
         production_df_list = pd.read_pickle(my_folder + '/r_production_df_list'+str(year_train)+str(year_test)+'.pkl')
         areaConsumption_list = pd.read_pickle(my_folder + '/r_areaConsumption_list'+str(year_train)+str(year_test)+'.pkl')
         duals_df_list = pd.read_pickle(my_folder + '/r_duals_df_list' + str(year_train) + str(year_test) + '.pkl')
-        price_param_df_list = pd.read_pickle(my_folder + '/r_price_param_df_list'+str(year_train)+'.pkl')
+        # price_param_df_list = pd.read_pickle(my_folder + '/r_price_param_df_list'+str(year_train)+'.pkl')
         bias_correction_df_list = pd.read_pickle(my_folder + '/r_bias_correction_df_list'+str(year_train)+'.pkl')
         bias_correction_lagr_df_list = pd.read_pickle(my_folder + '/r_bias_correction_lagr_df_list'+str(year_train)+'.pkl')
         merit_order_df = pd.read_pickle(my_folder + '/r_merit_order_df_'+str(year_train)+'.pkl')
@@ -63,12 +66,11 @@ for year_train in [2015]:
             bias_correction_lagr_df_ts = tmp.merge(bias_correction_lagr_df, how='left', left_index=True, right_index=True).reset_index(
                  ).set_index(['AREAS','TIMESTAMP'])
 
-            if is_train:
-                price_param_df = price_param_df_list[iter]
+            # if is_train:
+            #     price_param_df = price_param_df_list[iter]
 
             for i in ['param_with_bias','param_without_bias','duals_with_bias','duals_without_bias']:
             #for i in ['duals_without_bias']:
-                print(i)
                 if i == 'param_with_bias':
                     for_res_analysis_df = final_merit_order_df.merge(daPrices_df['price_obs'], how='left', left_index=True, right_index=True)
                 elif i == 'param_without_bias':
@@ -90,8 +92,8 @@ for year_train in [2015]:
             # for_res_analysis_df = for_res_analysis_df.rename(columns = {'energyCtr':'price_obs'})
 
                 # RMSE
-                rmse = mean_squared_error(for_res_analysis_df.price_obs, for_res_analysis_df.price_sim, squared = False)
-                rmse
+                #rmse = mean_squared_error(for_res_analysis_df.price_obs, for_res_analysis_df.price_sim, squared = False)
+                rmse = np.sqrt(np.mean((for_res_analysis_df.price_obs-for_res_analysis_df.price_sim)**2))
 
                 # Delta SD
                 delta_sd = np.std(for_res_analysis_df.price_obs) - np.std(for_res_analysis_df.price_sim)
@@ -123,7 +125,6 @@ for year_train in [2015]:
 
         pp = PdfPages(my_folder + '/timeseries'+str(year_train)+str(year_test)+'.pdf')
         for i in range(i_plot):
-            print(i)
             pp.savefig(plot_list[i])
         pp.close()
 

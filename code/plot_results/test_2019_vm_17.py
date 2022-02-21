@@ -8,28 +8,28 @@
 
 #region importation of modules
 import os
-import importlib
+#import importlib
 import pickle
 
 import numpy as np
 import pandas as pd
-import csv
+#import csv
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
 
-import datetime
-import calendar
-import copy
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
-from sklearn import linear_model
+#import datetime
+#import calendar
+#import copy
+#import plotly.graph_objects as go
+#import matplotlib.pyplot as plt
+#from sklearn import linear_model
 import sys
 
-import itertools
+#import itertools
 import time
-from sklearn.metrics import mean_squared_error
+#from sklearn.metrics import mean_squared_error
 from scipy.optimize import lsq_linear
 
 from functions.f_operationModels_03 import *
@@ -39,10 +39,13 @@ from functions.f_vm import *
 # importlib.reload(sys.modules['functions.f_vm'])
 #endregion''
 
+InputFolder='data_elecprices/'
+for_pyomo_folder='Data/for_pyomo'
+
 #region Import pickle data
-da_prices_df = pd.read_pickle('Data/for_pyomo/r_da_prices_df_15_18.pkl')
+da_prices_df = pd.read_pickle(InputFolder + 'r_da_prices_df_15_18.pkl')
 #gen_per_type_selected_df = pd.read_pickle('Data/for_pyomo/gen_per_type_phes_and_res_df_15_19.pkl')
-fuel_prices_df = pd.read_pickle('Data/for_pyomo/r_fuel_prices_df_15_18.pkl')
+fuel_prices_df = pd.read_pickle(InputFolder + 'r_fuel_prices_df_15_18.pkl')
 #exch_physical_selected_df = pd.read_pickle('Data/for_pyomo/exch_physical_selected_df_15_19.pkl')
 
 fuel_prices_df.ffill(axis = 0, inplace=True)
@@ -50,9 +53,6 @@ fuel_prices_df.ffill(axis = 0, inplace=True)
 #endregion
 
 #region Solver and data location definition
-
-InputFolder='Data/input/'
-for_pyomo_folder='Data/for_pyomo'
 
 if sys.platform != 'win32':
     myhost = os.uname()[1]
@@ -65,19 +65,22 @@ if (myhost=="jupyter-sop"):
     #  (2) definition of license
     os.environ["MOSEKLM_LICENSE_FILE"] = '@jupyter-sop'
 
-BaseSolverPath='/Users/robin.girard/Documents/Code/Packages/solvers/ampl_macosx64' ### change this to the folder with knitro ampl ...
-## in order to obtain more solver see see https://ampl.com/products/solvers/open-source/
-## for eduction this site provides also several professional solvers, that are more efficient than e.g. cbc
-sys.path.append(BaseSolverPath)
-solvers= ['gurobi','knitro','cbc'] # try 'glpk', 'cplex'
-solverpath= {}
-for solver in solvers : solverpath[solver]=BaseSolverPath+'/'+solver
+# Unused
+# BaseSolverPath='/Users/robin.girard/Documents/Code/Packages/solvers/ampl_macosx64' ### change this to the folder with knitro ampl ...
+# ## in order to obtain more solver see see https://ampl.com/products/solvers/open-source/
+# ## for eduction this site provides also several professional solvers, that are more efficient than e.g. cbc
+# sys.path.append(BaseSolverPath)
+# solvers= ['gurobi','knitro','cbc'] # try 'glpk', 'cplex'
+# solverpath= {}
+# for solver in solvers : solverpath[solver]=BaseSolverPath+'/'+solver
 solver= 'mosek' ## no need for solverpath with mosek.
 #endregion
 
 #region II - Ramp Ctrs Single area : loading parameters loading parameterscase with ramp constraints
-Zones=sorted(['FR']); tech_case='r_article_ramp' # 'Simple','RAMP1', 'MultiNode', 'RAMP2', 'r_article'
-year_train= 2015; year_test=2016
+Zones = sorted(['FR']) 
+tech_case='r_article_ramp' # 'Simple','RAMP1', 'MultiNode', 'RAMP2', 'r_article'
+year_train = 2015
+year_test = 2016
 is_with_bias_corr = True
 if year_train == 2015:
     best_iter = 3
@@ -129,10 +132,12 @@ else:
     TechParameters = pd.read_csv(InputFolder+'Gestion_'+tech_case+'_'+zones_concat+'_AREAS_TECHNOLOGIES'+str(year_test)+'.csv',sep=',',decimal='.',skiprows=0)
     ExchangeParameters = pd.read_csv(InputFolder+'Hypothese_'+zones_concat+'_AREAS_AREAS.csv',sep=',',decimal='.',skiprows=0,comment="#").set_index(["AREAS","AREAS.1"])
 
+# files generated after train
+FOLDER_OUTPUT = 'data_elecprices/output_modified/'
 if not is_train:
-    price_param_df_list = pd.read_pickle('./Data/for_pyomo/r_price_param_df_list'+str(year_train)+'.pkl')
-    bias_correction_df_list = pd.read_pickle('./Data/for_pyomo/r_bias_correction_df_list'+str(year_train)+'.pkl')
-    bias_correction_lagr_df_list = pd.read_pickle('./Data/for_pyomo/r_bias_correction_lagr_df_list'+str(year_train)+'.pkl')
+    price_param_df_list = pd.read_pickle(FOLDER_OUTPUT + 'r_price_param_df_list'+str(year_train)+'.pkl')
+    bias_correction_df_list = pd.read_pickle(FOLDER_OUTPUT + 'r_bias_correction_df_list'+str(year_train)+'.pkl')
+    bias_correction_lagr_df_list = pd.read_pickle(FOLDER_OUTPUT + 'r_bias_correction_lagr_df_list'+str(year_train)+'.pkl')
 
     price_param_df = price_param_df_list[best_iter].copy()
     bias_correction_df = bias_correction_df_list[best_iter].copy()
@@ -174,7 +179,7 @@ TechParameters = TechParameters.set_index(['AREAS','TECHNOLOGIES'])
 StorageParameters = StorageParameters.set_index(['AREAS','STOCK_TECHNO'])
 
 Real_AREAS_TECHNOLOGIES = TechParameters.index.values
-Real_AREAS_TECHNOLOGIES[0][0]
+print(Real_AREAS_TECHNOLOGIES[0][0])
 
 #### Selection of subset
 
@@ -202,7 +207,6 @@ fuel_price_df = timestamp_df.merge(fuel_prices_df, how = 'left')[['TIMESTAMP', '
 fuel_price_df = fuel_price_df.rename(columns = {'oil_price':'Fossil Oil','gas_price':'Fossil Gas','coal_price':'Fossil Hard coal'})
 fuel_price_df = pd.melt(fuel_price_df, id_vars=['TIMESTAMP']).rename(columns={'variable' : 'TECHNOLOGIES','value' : 'fuel_price'})
 fuel_price_df.set_index(['TIMESTAMP','TECHNOLOGIES'], inplace= True)
-
 co2_price_df = timestamp_df.merge(fuel_prices_df, how = 'left')[['TIMESTAMP', 'co2_price']]
 co2_price_df.set_index(['TIMESTAMP'], inplace= True)
 
@@ -221,8 +225,8 @@ if (is_train):
     price_param_df['fuel_price_param'] = 1
     price_param_df['co2_price_param'] = 1
 
-price_param_df[['margin_param']]
-margin_df[['margin']]
+#price_param_df[['margin_param']]
+#margin_df[['margin']]
 
 empty_indexed_df = vm_expand_grid({"AREAS": Selected_AREAS, "TIMESTAMP": Selected_TIMESTAMP, "TECHNOLOGIES": Selected_TECHNOLOGIES})
 empty_indexed_df = empty_indexed_df.set_index(['AREAS','TIMESTAMP','TECHNOLOGIES'])
@@ -281,7 +285,7 @@ TechParameters_export = TechParameters_export[['capacity']]
 #region II - Ramp Ctrs Single area : solving and loading results
 if (is_train):
     # my_range = range(5)
-    my_range = range(5)
+    my_range = range(4)
 else:
     my_range = range(1)
 
@@ -301,7 +305,6 @@ for iter in my_range:
         # fuel_price_df
         full_fuel_price_df = empty_indexed_df.merge(fuel_price_df,how='left', left_index=True, right_index=True)
         full_fuel_price_df = full_fuel_price_df.fillna(0)
-
         # co2_price_df
         full_co2_price_df = empty_indexed_df.merge(co2_price_df,how='left', left_index=True, right_index=True)
         full_co2_price_df = full_co2_price_df.fillna(0)
@@ -347,7 +350,6 @@ for iter in my_range:
             tmp_technologies = ['Fossil Gas','Fossil Hard coal','Fossil Oil']
             price_param_df.loc[(slice(None),tmp_technologies), 'fuel_price_param'] = 1
 
-
             # co2_price_param_df
             price_param_df['co2_price_param'] = 0
             price_param_df.loc[(slice(None),'Fossil Hard coal'), 'co2_price_param'] = 0.986 #* conversion_factor
@@ -355,6 +357,24 @@ for iter in my_range:
             price_param_df.loc[(slice(None),'Fossil Gas'), 'co2_price_param'] = 0.429 #* conversion_factor
             # price_param_df.loc[(slice(None),'Biomass'), 'co2_price_param'] = 0.494 * conversion_factor
 
+    print('iter = ', iter)
+
+    def truncated_log(data):
+        data[data > 0] = np.log(data[data!=0])
+        data[data <= 0] = 0
+        return data
+
+    def step_func(data, threshold):
+        data[data < threshold] = 0
+        return data
+
+    print(margin_price_df['margin'])
+    print(full_fuel_price_df['fuel_price'])
+    print(full_co2_price_df['co2_price'])
+
+    # margin_price_df['margin'] = (margin_price_df['margin'])
+    # full_fuel_price_df['fuel_price'] = full_fuel_price_df['fuel_price']
+    full_co2_price_df['co2_price'] = full_co2_price_df['co2_price']**2
 
     obj_param_df = empty_indexed_df.merge(
         price_param_df['intercept_param'], how='left', left_index=True, right_index=True).merge(
@@ -372,27 +392,29 @@ for iter in my_range:
     isAbstract = False
     LineEfficiency = 1
 
-    availabilityFactor.loc[('FR', slice(None), 'Fossil Gas')].describe()
-    availabilityFactor.loc[('FR', slice(None), 'Fossil Hard coal')].describe()
-    availabilityFactor.loc[('FR', slice(None), 'Fossil Oil')].describe()
-    availabilityFactor.loc[('FR', slice(None), 'Hydro Water Reservoir')].describe()
-    availabilityFactor.loc[('FR', slice(None), 'Nuclear')].describe()
-    areaConsumption.describe()
-    TechParameters
-    obj_param_df.groupby('TECHNOLOGIES').describe()['intercept_param']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['margin_param']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['margin']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['fuel_price_param']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['fuel_price']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['co2_price_param']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['co2_price']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['energy_param']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['p0']
-    obj_param_df.groupby('TECHNOLOGIES').describe()['p1']
+    #print(areaConsumption, availabilityFactor, TechParameters, StorageParameters)
+    #print(obj_param_df)
+    # availabilityFactor.loc[('FR', slice(None), 'Fossil Gas')].describe()
+    # availabilityFactor.loc[('FR', slice(None), 'Fossil Hard coal')].describe()
+    # availabilityFactor.loc[('FR', slice(None), 'Fossil Oil')].describe()
+    # availabilityFactor.loc[('FR', slice(None), 'Hydro Water Reservoir')].describe()
+    # availabilityFactor.loc[('FR', slice(None), 'Nuclear')].describe()
+    # areaConsumption.describe()
+    # TechParameters
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['intercept_param']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['margin_param']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['margin']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['fuel_price_param']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['fuel_price']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['co2_price_param']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['co2_price']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['energy_param']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['p0']
+    # obj_param_df.groupby('TECHNOLOGIES').describe()['p1']
     # availabilityFactor_interco.groupby('INTERCOS').describe()
     # TechParameters_interco
     # interco_df.groupby('INTERCOS').describe()
-
+    
     t = time.time()
     model = GetElectricSystemModel_Param_Interco_Storage_GestionSingleNode(areaConsumption,availabilityFactor,TechParameters,StorageParameters,
                                                                    obj_param_df=obj_param_df,
@@ -407,11 +429,13 @@ for iter in my_range:
                                                                    ExchangeParameters=ExchangeParameters,
                                                                    LineEfficiency=LineEfficiency)
 
+    t2 = time.time()
+    print('model',t2 - t)
     opt = SolverFactory(solver)
-    results=opt.solve(model)
-    results
+    results = opt.solve(model)
+    #results
     elapsed = time.time() - t
-    print(elapsed)
+    print('solve',elapsed)
 
     model_list.append(model)
     results_list.append(results)
@@ -421,6 +445,7 @@ for iter in my_range:
 
     Variables=getVariables_panda_indexed(model)
     production_df=EnergyAndExchange2Prod(Variables)
+    # print(production_df)
     #production_df=production_df.reset_index().set_index(['AREAS', 'TIMESTAMP'])
     value(model.OBJ)/1000000000 # Cout total en milliards d'euros
 
@@ -645,7 +670,8 @@ for iter in my_range:
                     #     # Keep previous value
                     #     param_dict[(my_area, my_tech)] = np.array(price_param_df.loc[(my_area, my_tech), param_names])
 
-
+        #Read parameters linearisation
+        print("linearisation", param_dict)
         asd = pd.DataFrame.from_dict(param_dict, orient='index')
         asd.index = pd.MultiIndex.from_tuples(asd.index.values, names=['AREAS', 'TECHNOLOGIES'])
         asd.columns = param_names
@@ -783,33 +809,33 @@ for iter in my_range:
 # Constraints['rampCtrPlus'].set_index(['AREAS', 'TIMESTAMP'])
 
 # Save
-with open('./Data/for_pyomo/r_results_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
+with open(FOLDER_OUTPUT + 'r_results_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
     pickle.dump(results_list, f)
 
-with open('./Data/for_pyomo/r_final_merit_order_df_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
+with open(FOLDER_OUTPUT + 'r_final_merit_order_df_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
     pickle.dump(final_merit_order_df_list, f)
 
-with open('./Data/for_pyomo/r_production_df_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
+with open(FOLDER_OUTPUT + 'r_production_df_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
     pickle.dump(production_df_list, f)
 
-with open('./Data/for_pyomo/r_areaConsumption_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
+with open(FOLDER_OUTPUT + 'r_areaConsumption_list'+str(year_train)+str(year_test)+'.pkl', 'wb') as f:
     pickle.dump(areaConsumption_list, f)
 
-with open('./Data/for_pyomo/r_duals_df_list' + str(year_train) + str(year_test) + '.pkl', 'wb') as f:
+with open(FOLDER_OUTPUT + 'r_duals_df_list' + str(year_train) + str(year_test) + '.pkl', 'wb') as f:
     pickle.dump(duals_df_list, f)
 
-with open('./Data/for_pyomo/r_daPrices_df_' + str(year_test) + '.pkl', 'wb') as f:
+with open(FOLDER_OUTPUT + 'r_daPrices_df_' + str(year_test) + '.pkl', 'wb') as f:
     pickle.dump(daPrices_df, f)
 
 if is_train:
-    with open('./Data/for_pyomo/r_price_param_df_list'+str(year_train)+'.pkl', 'wb') as f:
+    with open(FOLDER_OUTPUT + 'r_price_param_df_list'+str(year_train)+'.pkl', 'wb') as f:
         pickle.dump(price_param_df_list, f)
 
-    with open('./Data/for_pyomo/r_bias_correction_df_list'+str(year_train)+'.pkl', 'wb') as f:
+    with open(FOLDER_OUTPUT + 'r_bias_correction_df_list'+str(year_train)+'.pkl', 'wb') as f:
         pickle.dump(bias_correction_df_list, f)
 
-    with open('./Data/for_pyomo/r_bias_correction_lagr_df_list'+str(year_train)+'.pkl', 'wb') as f:
+    with open(FOLDER_OUTPUT + 'r_bias_correction_lagr_df_list'+str(year_train)+'.pkl', 'wb') as f:
         pickle.dump(bias_correction_lagr_df_list, f)
 
-    with open('./Data/for_pyomo/r_merit_order_df_'+str(year_train)+'.pkl', 'wb') as f:
+    with open(FOLDER_OUTPUT + 'r_merit_order_df_'+str(year_train)+'.pkl', 'wb') as f:
         pickle.dump(merit_order_df, f)
